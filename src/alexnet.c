@@ -1,12 +1,13 @@
 /**
  * 
- * Haris Wang       1313.9.19
+ * Haris Wang       2020.9.19
  * 
  * */
 
 #include <stdlib.h>
 #include <math.h>
 #include "alexnet.h"
+#include "hyperparams.h"
 
 #define MAX(a,b) (((a) > (b)) ? (a) : (b))
 #define MIN(a,b) (((a) < (b)) ? (a) : (b))
@@ -132,7 +133,7 @@ void conv_forward(float *input, float *weights, float *bias, float *output,
                     }
                     output[p*out_channels*out_w*out_h + out_c*out_w*out_h + cur_w*out_h + cur_h] += bias[out_c];
 
-                    printf("%.2f \n", x, y, output[p*out_channels*out_w*out_h + out_c*out_w*out_h + cur_w*out_h + cur_h]);
+                    // printf("%.2f \n", x, y, output[p*out_channels*out_w*out_h + out_c*out_w*out_h + cur_w*out_h + cur_h]);
                 
                     cur_h++;
                 }
@@ -314,7 +315,6 @@ void fc_forward(float *input, float *out, float *weights, float *bias, int in_un
      * weights  (in_units, out_units)
      * bias     (out_units)
      * */
-
     for (int p=0; p<BATCH_SIZE; p++)
     {
         for (int i = 0; i < in_units; i++)
@@ -527,16 +527,26 @@ void zero_grads(Alexnet *grads)
 }
 
 
-void param_init(Alexnet *net)
+void xavier_initialization(float *p, int n, int in_units, int out_units)
 {
-    memset(net->C1_weights, 0, 4);
-    memset(net->C2_weights, 0, 4);
-    memset(net->C3_weights, 0, 4);
-    memset(net->C4_weights, 0, 4);
-    memset(net->C5_weights, 0, 4);
-    memset(net->FC6weights, 0, 4);
-    memset(net->FC7weights, 0, 4);
-    memset(net->OUTweights, 0, 4);
+    float boundary = sqrt(6/(in_units+out_units));
+    for(int shift=0; shift<n; shift++)
+    {
+        *(p+shift) = (1.0*rand() / RAND_MAX ) * (2*boundary) - boundary;
+    }
+}
+
+
+void global_params_initialize(Alexnet *net)
+{
+    xavier_initialization(net->C1_weights, C1_CHANNELS*IN_CHANNELS*C1_KERNEL_L*C1_KERNEL_L, IN_CHANNELS*FEATURE0_L*FEATURE0_L, C1_CHANNELS*FEATURE1_L*FEATURE1_L);
+    xavier_initialization(net->C2_weights, C2_CHANNELS*C1_CHANNELS*C2_KERNEL_L*C2_KERNEL_L, C1_CHANNELS*POOLING1_L*POOLING1_L, C2_CHANNELS*FEATURE2_L*FEATURE2_L);
+    xavier_initialization(net->C3_weights, C3_CHANNELS*C2_CHANNELS*C3_KERNEL_L*C3_KERNEL_L, C2_CHANNELS*POOLING2_L*POOLING2_L, C3_CHANNELS*FEATURE3_L*FEATURE3_L);
+    xavier_initialization(net->C4_weights, C4_CHANNELS*C3_CHANNELS*C4_KERNEL_L*C4_KERNEL_L, C3_CHANNELS*FEATURE3_L*FEATURE3_L, C4_CHANNELS*FEATURE4_L*FEATURE4_L);
+    xavier_initialization(net->C5_weights, C5_CHANNELS*C4_CHANNELS*C5_KERNEL_L*C5_KERNEL_L, C4_CHANNELS*FEATURE4_L*FEATURE4_L, C5_CHANNELS*FEATURE5_L*FEATURE5_L);
+    xavier_initialization(net->FC6weights, C5_CHANNELS*FC6_LAYER*FC6KERNEL_L*FC6KERNEL_L, C5_CHANNELS*POOLING5_L*POOLING5_L, FC6_LAYER);
+    xavier_initialization(net->FC7weights, FC6_LAYER*FC7_LAYER, FC6_LAYER, FC7_LAYER);
+    xavier_initialization(net->OUTweights, FC7_LAYER*OUT_LAYER, FC7_LAYER, OUT_LAYER);
 
     memset(net->C1_bias, 0, 4);
     memset(net->C2_bias, 0, 4);
@@ -546,11 +556,11 @@ void param_init(Alexnet *net)
     memset(net->FC6bias, 0, 4);
     memset(net->FC7bias, 0, 4);
 
-    net->BN1_gamma = 0;
-    net->BN2_gamma = 0;
-    net->BN3_gamma = 0;
-    net->BN4_gamma = 0;
-    net->BN5_gamma = 0;
+    net->BN1_gamma = 1;
+    net->BN2_gamma = 1;
+    net->BN3_gamma = 1;
+    net->BN4_gamma = 1;
+    net->BN5_gamma = 1;
     net->BN1_b = 0;
     net->BN2_b = 0;
     net->BN3_b = 0;
@@ -590,10 +600,11 @@ void zero_feats(Feature *feats)
 
 void net_forward(Alexnet *alexnet, Feature *feats)
 {
+
     conv_forward(feats->input, alexnet->C1_weights, alexnet->C1_bias, feats->C1, IN_CHANNELS, C1_CHANNELS, C1_KERNEL_L, 4, C1_STRIDES, FEATURE0_L, FEATURE0_L);
     batch_normalization_forward(feats->C1, feats->BN1, alexnet->BN1_gamma, alexnet->BN1_b, alexnet->BN1_avg, alexnet->BN1_var, C1_CHANNELS*FEATURE1_L*FEATURE1_L);
     nonlinear_forward(feats->BN1, C1_CHANNELS*FEATURE1_L*FEATURE1_L);
-
+    
     max_pooling_forward(feats->BN1, feats->P1, C1_CHANNELS, FEATURE1_L, 2, 3);
 
     conv_forward(feats->P1, alexnet->C2_weights, alexnet->C2_bias, feats->C2, C1_CHANNELS, C2_CHANNELS, C2_KERNEL_L, 1, C2_STRIDES, FEATURE1_L, FEATURE1_L);
@@ -616,17 +627,18 @@ void net_forward(Alexnet *alexnet, Feature *feats)
 
     max_pooling_forward(feats->BN5, feats->P5, C5_CHANNELS, FEATURE5_L, 2, 3);
 
-    fc_forward(feats->P5, feats->FC6, alexnet->FC6weights, alexnet->FC6bias, FC6KERNEL_L*C5_CHANNELS*C5_CHANNELS, FC6_LAYER);
+    fc_forward(feats->P5, feats->FC6, alexnet->FC6weights, alexnet->FC6bias, C5_CHANNELS*POOLING5_L*POOLING5_L, FC6_LAYER);
     nonlinear_forward(feats->FC6, FC6_LAYER);
 
     fc_forward(feats->FC6, feats->FC7, alexnet->FC7weights, alexnet->FC7bias, FC6_LAYER, FC7_LAYER);
     nonlinear_forward(feats->FC7, FC7_LAYER);
 
     softmax_forward(feats->FC7, feats->output, OUT_LAYER);
+
 }
 
 
-void params_update(Alexnet *alexnet, Alexnet *deltas, float a)
+void gradient_descent(Alexnet *alexnet, Alexnet *deltas, float a)
 {
     int i;
     float *p_w, *p_d;
@@ -744,7 +756,7 @@ void net_backward(Feature *error, Alexnet *alexnet, Alexnet *deltas, Feature *fe
     fc_backward(feats->FC7, alexnet->FC7weights, error->FC6, error->FC7, deltas->FC7weights, deltas->FC7bias, FC6_LAYER, FC7_LAYER);
 
     nonlinear_backward(error->FC6, FC6_LAYER);
-    fc_backward(feats->FC6, alexnet->FC6weights, error->P5, error->FC6, deltas->FC6weights, deltas->FC6bias, FC6KERNEL_L*C5_CHANNELS*C5_CHANNELS, FC6_LAYER);
+    fc_backward(feats->FC6, alexnet->FC6weights, error->P5, error->FC6, deltas->FC6weights, deltas->FC6bias, C5_CHANNELS*POOLING5_L*POOLING5_L, FC6_LAYER);
 
     max_pooling_backward(C5_CHANNELS, 3, FEATURE5_L, error->BN5, error->P5, feats->C5);
 
@@ -775,10 +787,10 @@ void net_backward(Feature *error, Alexnet *alexnet, Alexnet *deltas, Feature *fe
     nonlinear_backward(error->BN1, C1_CHANNELS*FEATURE1_L*FEATURE1_L);
     batch_normalization_backward(error->C1, error->BN1, &(deltas->BN1_gamma), &(deltas->BN1_b), alexnet->BN1_avg, alexnet->BN5_var, alexnet->BN1_gamma, C1_CHANNELS*FEATURE1_L*FEATURE1_L);
     conv_backward(error->input, error->C1, feats->C1, alexnet->C1_weights, deltas->C1_weights, deltas->C1_bias, 
-                    IN_CHANNELS, C1_CHANNELS, FEATURE1_L, FEATURE1_L, 4, C1_KERNEL_L, 0);
+                    IN_CHANNELS, C1_CHANNELS, FEATURE1_L, FEATURE1_L, 4, C1_KERNEL_L, C1_STRIDES);
 
 
-    params_update(alexnet, deltas, lr);
+    gradient_descent(alexnet, deltas, lr);
 
 }
 
@@ -802,44 +814,4 @@ void compute_mse_error(float *error, float *preds, float *labels, int units)
         error[i] /= BATCH_SIZE;
     }
 
-}
-
-
-void train(Alexnet *alexnet)
-{
-    Feature feats;
-    float *batch_x = (float *)malloc(4*BATCH_SIZE*3*FEATURE0_L*FEATURE0_L);
-    float *batch_y = (float *)malloc(4*BATCH_SIZE*OUT_LAYER);
-
-    /** 
-     * sample batch data
-     * */
-
-    net_forward(alexnet, &feats);
-
-    Alexnet deltas;
-    Feature error;
-    zero_feats(&error);
-
-    compute_mse_error(error.output, feats.output, batch_y, OUT_LAYER);
-
-    zero_grads(&deltas);
-    net_backward(&error, alexnet, &deltas, &feats, 0.001);
-
-    free(batch_x);
-    free(batch_y);
-
-
-
-}
-
-
-void predict(Alexnet *alexnet, float *inputs, float *outputs)
-{
-
-    Feature feats;
-    memcpy(feats.input, inputs, sizeof(feats.input));
-    net_forward(alexnet, &feats);
-    memcpy(outputs, feats.output, sizeof(feats.output));
-    
 }
