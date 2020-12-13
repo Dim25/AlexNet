@@ -1,14 +1,19 @@
 #include <stdlib.h>
-#include "alexnet.h"
 
 typedef struct{
-    float x[IN_CHANNELS][FEATURE0_L][FEATURE0_L];
-    float y[OUT_LAYER];
-} data;
+    int w;
+    int h;
+    int c;
+    float *data;
+} image;
 
 
-char** get_random_paths(int n);
+char** get_random_paths(int label);
 
-data load_data_from_file(char *PATH, int label);
-void get_random_batch(int n, float *X, float *y, int IMG_SIZE, int LABEL_SIZE);
+image make_image(int w, int h, int c);
+void  free_image(image *img);
+image load_image(char *filename, int W, int H, int channels);
+image resize_image(image im, int w, int h);
+
+void get_random_batch(int n, float *X, float *y, int w, int h, int c, int LABEL_SIZE);
 void get_next_batch(int n, int offset, float *X, float *y, int IMG_SIZE, int LABEL_SIZE);

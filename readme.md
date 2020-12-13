@@ -6,55 +6,55 @@ This project is an unofficial implemention of AlexNet-7, using C Program Languag
 
 ## Original AlexNet7 Details
 
-- $\surd$ ~~Gaussian Initialization(mean=0,stddv=0.01)~~ XavierInitialization for all $w$s
-- $\surd$ OneInitialization for all $b$s
-- $\surd$ ReLU
+- ~~Gaussian Initialization(mean=0,stddv=0.01)~~ XavierInitialization for all $w$s
+- OneInitialization for all $b$s
+- ReLU
 - Dropout in the first two FC layers
 - Data Augmentation: generating image translations & horizontal reflections
 - ~~Local Response Normalization~~ Here I use Batch-Norm instead of LR-Norm
-- $\surd$ Overlapping Pooling
-- $\surd$ MomentumSGD
-- $\surd$ CrossEntropy Loss
+- Overlapping Pooling
+- MomentumSGD
+- CrossEntropy Loss
 - CUDA / 2 GPU / Training
 
 ## Todo List
-  
-- **Dataset: loader**
 
-- **Dataset: sampler**
+- [ ]  **Full test**
 
-- **Operation: Dropout regularization**
-
-- **Full test**
-
-- **Moudulr & Decoupling**
+- [ ]  **Try & Compare on ImageNet**
  
-- **Trainer: logger**
+- [ ]  **Trainer: logger**
 
-- **Trainer: lr-scheduler** 
+- [ ]  **Moudulr & Decoupling**
+
+- [ ]  **Trainer: lr-scheduler** 
   
-- **Trainer: weights save/load**
+- [ ]  **Trainer: weights save/load**
 
-- **CUDA speed boosting**
+- [ ]  **CUDA speed boosting**
 
-- **Try & Compare on ImageNet**
+- [ ]  **circle loss**
 
-- **circle loss**
+- [ ]  **Finally, an overall review on this project**
 
-- **Finally, an overall review on this project**
+- [x]  **unit testing for all ops**
 
-- $\surd$ **unit testing for all ops**
+- [x]  **net_forward testing**
 
-- $\surd$ **net_forward testing**
+- [x]  **net_backward testing**
 
-- $\surd$ **net_backward testing**
+- [x]  **parameters initilization**
 
-- $\surd$ **parameters initilization**
+- [x]  **Metrics: Accuracy**
 
-- $\surd$ **Metrics: Accuracy**
+- [x]  **Metrics: Precision**
 
-- $\surd$ **Metrics: Precision**
+- [x]  **Metrics: Recall**
 
-- $\surd$ **Metrics: Recall**
+- [x]  **MomentumSGD**
 
-- $\surd$ **MomentumSGD**
+- [x]  **Operation: Dropout regularization**
+
+- [x]  **Dataset: loader**
+
+- [x]  **Dataset: sampler**
