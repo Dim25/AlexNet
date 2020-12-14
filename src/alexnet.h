@@ -45,7 +45,7 @@ typedef struct{
     float C5_weights[C5_CHANNELS][C4_CHANNELS][C5_KERNEL_L][C5_KERNEL_L];
     float FC6weights[C5_CHANNELS][FC6_LAYER][FC6KERNEL_L][FC6KERNEL_L];
     float FC7weights[FC6_LAYER][FC7_LAYER];
-    float OUTweights[FC7_LAYER][OUT_LAYER];
+    float FC8weights[FC7_LAYER][OUT_LAYER];
     
     float C1_bias[C1_CHANNELS];
     float C2_bias[C2_CHANNELS];
@@ -54,6 +54,7 @@ typedef struct{
     float C5_bias[C5_CHANNELS];
     float FC6bias[FC6_LAYER];
     float FC7bias[FC7_LAYER];
+    float FC8bias[OUT_LAYER];
 
     float BN1_gamma, BN1_b;
     float BN2_gamma, BN2_b;
@@ -132,17 +133,17 @@ void batch_normalization_backward(float *in_error, float *out_error,
                                     float *delta_gamma, float *delta_beta, 
                                         float *avg, float *var, float gamma, int units);
 
-void softmax_forward(float *input, float *output, int units);
+void softmax_forward(float *x, int units);
 
-void softmax_backward(float *in_error, float *out_error, int units);
+void softmax_backward(float *error, int units);
 
 
 void net_forward(Alexnet *alexnet, Feature *feats);
-void net_backward(Feature *error, Alexnet *alexnet, Alexnet *deltas, Feature *feats, float lr);
+void net_backward(Feature *error, const Alexnet *alexnet, Alexnet *deltas, const Feature *feats, float lr);
 void cal_v_detlas(Alexnet *v, Alexnet *d);
 
-void CatelogCrossEntropy(float *error, float *preds, float *labels, int units);
-void CatelogCrossEntropy_backward(float *delta_preds, float *preds, float *labels, int units);
+void CatelogCrossEntropy(float *error, const float *preds, const float *labels, int units);
+void CatelogCrossEntropy_backward(float *delta_preds, const float *preds, const float *labels, int units);
 
 
 

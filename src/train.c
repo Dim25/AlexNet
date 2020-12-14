@@ -8,6 +8,7 @@
 #include <stdio.h>
 #include <assert.h>
 #include <string.h>
+#include <time.h>
 #include "alexnet.h"
 #include "data.h"
 #include "hyperparams.h"
@@ -24,17 +25,16 @@ int argmax(float *arr, int shift, int n)
      * Return:
      *      the index of max-value
      * */ 
-    int idx=-1,
-        max=0;
+    int idx=-1;
+    float max=-1.0;
     for(int p=0; p<n; p++)
     {
-        if(arr[shift+p]>max)
+        if(arr[shift+p] > max)
         {
             idx = p;
             max = arr[shift+p];
         }
     }
-    
     assert(idx!=-1);
     return idx;
 }
@@ -56,28 +56,24 @@ void metrics(float *ret, int *preds, int *labels,
      *      ret     
      * */
 
-    int *totPred  = (float *)malloc(classes * sizeof(int)),
-        *totLabel = (float *)malloc(classes * sizeof(int)),
-        *TP       = (float *)malloc(classes * sizeof(int));
-    memset(totPred, 0, sizeof(int));
-    memset(totLabel, 0, sizeof(int));
-    memset(TP, 0, sizeof(int));
+    int *totPred  = (int *)malloc(classes * sizeof(int)),
+        *totLabel = (int *)malloc(classes * sizeof(int)),
+        *TP       = (int *)malloc(classes * sizeof(int));
+    memset(totPred, 0, classes * sizeof(int));
+    memset(totLabel, 0, classes * sizeof(int));
+    memset(TP, 0, classes * sizeof(int));
 
     for(int p=0; p<totNum; p++)
     {
-        
         totPred[preds[p]]++;
         totLabel[labels[p]]++;
         if(preds[p]==labels[p])
         {
             TP[preds[p]]++;
         }
-
     }
 
     int tmp_a=0, tmp_b=0;
-
-
     for(int p=0; p<classes; p++)
     {
         tmp_a += TP[p];
@@ -87,6 +83,9 @@ void metrics(float *ret, int *preds, int *labels,
     if(type==METRIC_ACCURACY)
     {
         *ret = accuracy;
+        free(totPred);
+        free(totLabel);
+        free(TP);
         return;
     }
 
@@ -102,6 +101,9 @@ void metrics(float *ret, int *preds, int *labels,
     if(type==METRIC_PRECISION)
     {
         *ret = macro_p;
+        free(totPred);
+        free(totLabel);
+        free(TP);
         return;
     }
 
@@ -117,12 +119,18 @@ void metrics(float *ret, int *preds, int *labels,
     if(type==METRIC_RECALL)
     {
         *ret = macro_r;
+        free(totPred);
+        free(totLabel);
+        free(TP);
         return;
     }
 
     if(type==METRIC_F1SCORE)
     {
         *ret = 2*macro_p*macro_r / (macro_p+macro_r);
+        free(totPred);
+        free(totLabel);
+        free(TP);
         return;
     }
 
@@ -166,48 +174,57 @@ void train(Alexnet *alexnet, int epochs)
     static Feature feats;
     static Alexnet deltas;
     static Feature error;
-    float *batch_x = (float *)malloc(BATCH_SIZE*IN_CHANNELS*FEATURE0_L*FEATURE0_L*sizeof(float));
     float *batch_y = (float *)malloc(BATCH_SIZE*OUT_LAYER*sizeof(float));
     float *CeError = (float *)malloc(OUT_LAYER*sizeof(float));
 
     float metric=0; 
-    static int labels[BATCH_SIZE],preds[BATCH_SIZE];
+    static int labels[BATCH_SIZE], preds[BATCH_SIZE];
 
-    for(int e=0; e<epochs; e++)
+    printf(" ################# training start ################# \n");
+    int start,finish; double duration;
+    for(int e=0; e<EPOCHS; e++)
     {
         zero_feats(&error);
         zero_grads(&deltas);
 
         // sample random batch of data for training
-        get_random_batch(BATCH_SIZE, batch_x, batch_y, FEATURE0_L, FEATURE0_L, IN_CHANNELS, OUT_LAYER);
+        get_random_batch(BATCH_SIZE, &(feats.input), batch_y, FEATURE0_L, FEATURE0_L, IN_CHANNELS, OUT_LAYER);
+        printf("input data loaded... \n");
 
-        memcpy(feats.input, batch_x, BATCH_SIZE*IN_CHANNELS*FEATURE0_L*FEATURE0_L*sizeof(float));
-        //printf("after \"memcpy\" \n");
-
+        start = clock();
         net_forward(alexnet, &feats);
-        //printf("after \"net_forward\" \n");
-
+        finish = clock();
+        duration = (double)(finish- start) / CLOCKS_PER_SEC;
+        printf("net_forward duration: %.2fs \n", duration);
+        printf("after \"net_forward\" ... \n");
+ 
         // compute CatelogCrossEntropy
         CatelogCrossEntropy(CeError, feats.output, batch_y, OUT_LAYER);
         CatelogCrossEntropy_backward(error.output, feats.output, batch_y, OUT_LAYER);
-        //printf("after \"CatelogCrossEntropy_backward\" \n");
+        printf("after \"CatelogCrossEntropy_backward\" ... \n");
 
         // update all trainable parameters
+        start = clock();
         net_backward(&error, alexnet, &deltas, &feats, LEARNING_RATE);
-        //printf("after \"net_backward\" \n");
+        finish = clock();
+        duration = (double)(finish- start) / CLOCKS_PER_SEC;
+        printf("net_backward duration: %.2fs \n", duration);
+        printf("after \"net_backward\" ... \n");
 
+        int idx;
+        float max;
         for(int i=0; i<BATCH_SIZE; i++)
         {
-            labels[i] = argmax(&(feats.output), i*OUT_LAYER, OUT_LAYER); 
-            preds[i]  = argmax(&(feats.output), i*OUT_LAYER, OUT_LAYER);
+            labels[i] = argmax(batch_y, i*OUT_LAYER, OUT_LAYER);
+            printf("index %d: label:%d  ", i, labels[i]);
+            preds[i] = argmax(&(feats.output), i*OUT_LAYER, OUT_LAYER);
+            printf("pred:%d \n", preds[i]);
         }
         metrics(&metric, preds, labels, OUT_LAYER, BATCH_SIZE, METRIC_ACCURACY);
-        //printf("At epoch %d, Accuracy on training data is %.2f \n", e, metric);
-    
+        printf("At epoch %d, Accuracy on training batch data is %.2f\% \n\n", e*100, metric);
     }
-
+    printf(" ################# training end ################# \n");
+ 
     free(CeError);
-    free(batch_x);
     free(batch_y);
-
 }

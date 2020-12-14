@@ -2,11 +2,11 @@
 #include <stdio.h>
 #include "alexnet.h"
 
-Alexnet alex;
-Feature feat;
-
 int main(void)
 {
+    static Alexnet alex;
+    global_params_initialize(&alex);
+    //static Feature feat;
     train(&alex, 10);
     return 0;
 }

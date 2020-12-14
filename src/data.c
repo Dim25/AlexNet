@@ -145,47 +145,6 @@ image load_image(char *filename, int W, int H, int channels)
 }
 
 
-typedef struct {
-    char c_str[16];
-    char f_str[32][20];
-} fileHdr;
-
-void get_file_path(char *str, int class)
-{
-    static fileHdr fdir[1000];
-    static int flag;
-    if(flag!=256)
-    {
-        DIR    *dir;
-        struct    dirent    *ptr;
-        char path[20];
-        sprintf(path, "../input/imagenetmini-1000/imagenet-mini/train/");
-        dir = opendir(path);
-        for(int i=0; i<1000; i++)
-        {
-            if((ptr = readdir(dir)) == NULL)
-            {
-                break;
-            }
-            sprintf(fdir[i].c_str, "%s", ptr->d_name);
-            sprintf(path, "../input/imagenetmini-1000/imagenet-mini/train/%s", path, ptr->d_name);
-            dir = opendir(path);
-            for(int p=0;;p++)
-            {
-                if((ptr = readdir(dir)) == NULL)
-                {
-                    break;
-                }    
-                sprintf(fdir[i].f_str[p], "%s", ptr->d_name);
-            }
-        }
-        flag=256;
-    }
-
-    sprintf(str, "../input/imagenetmini-1000/imagenet-mini/train/%s/%s", fdir[class].c_str, fdir[class].f_str[rand()%30]);
-}
-
-
 void get_random_batch(int n, float *X, float *Y, 
                         int w, int h, int c, int CLASSES)
 {
@@ -201,13 +160,22 @@ void get_random_batch(int n, float *X, float *Y,
      * */
     image img; 
     img = make_image(w, h, c);
-    char path[256];
+    char imgpath[256];
     int label = 1;
     for (int i=0; i<n; i++)
     {
-        get_file_path(path, label);
-        img = load_image(path, w, h, c);
+        //label = rand()%CLASSES;
+        label = 2;
+        //sprintf(imgpath, "C:\\Download\\AlexNet7-test\\imagenet-mini\\train\\%d\\%d.jpeg", label, rand()%15);
+        sprintf(imgpath, "/home/haris/Documents/AlexNet7/dataset/%d/%d.png", label, rand()%10);
+
+        printf("image: %s \n", imgpath);
+        img = load_image(imgpath, w, h, c);
         memcpy(X+i*w*h*c, img.data, w*h*c*sizeof(float));
+        for(int s=0; s<CLASSES; s++)
+        {
+            Y[i*CLASSES+s]=0;
+        } 
         Y[i*CLASSES+label]=1;
     }
 }
