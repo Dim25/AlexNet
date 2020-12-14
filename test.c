@@ -7,6 +7,6 @@ Feature feat;
 
 int main(void)
 {
-    train(alex, 10);
+    train(&alex, 10);
     return 0;
 }

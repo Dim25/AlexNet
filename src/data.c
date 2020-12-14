@@ -159,7 +159,7 @@ void get_file_path(char *str, int class)
         DIR    *dir;
         struct    dirent    *ptr;
         char path[20];
-        sprintf(path, "./");
+        sprintf(path, "../input/imagenetmini-1000/imagenet-mini/train/");
         dir = opendir(path);
         for(int i=0; i<1000; i++)
         {
@@ -168,7 +168,7 @@ void get_file_path(char *str, int class)
                 break;
             }
             sprintf(fdir[i].c_str, "%s", ptr->d_name);
-            sprintf(path, "./%s", path, ptr->d_name);
+            sprintf(path, "../input/imagenetmini-1000/imagenet-mini/train/%s", path, ptr->d_name);
             dir = opendir(path);
             for(int p=0;;p++)
             {
@@ -182,7 +182,7 @@ void get_file_path(char *str, int class)
         flag=256;
     }
 
-    sprintf(str, "./%s/%s", fdir[class].c_str, fdir[class].f_str[rand()%30]);
+    sprintf(str, "../input/imagenetmini-1000/imagenet-mini/train/%s/%s", fdir[class].c_str, fdir[class].f_str[rand()%30]);
 }
 
 
