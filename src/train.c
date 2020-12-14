@@ -179,15 +179,10 @@ void train(Alexnet *alexnet, int epochs)
         zero_grads(&deltas);
 
         // sample random batch of data for training
-<<<<<<< HEAD
-        get_random_batch(BATCH_SIZE, batch_x, batch_y, IN_CHANNELS*FEATURE0_L*FEATURE0_L, OUT_LAYER);
-        memcpy(feats.input, batch_x, BATCH_SIZE*IN_CHANNELS*FEATURE0_L*FEATURE0_L*sizeof(float));
-=======
         get_random_batch(BATCH_SIZE, batch_x, batch_y, FEATURE0_L, FEATURE0_L, IN_CHANNELS, OUT_LAYER);
 
         memcpy(feats.input, batch_x, BATCH_SIZE*IN_CHANNELS*FEATURE0_L*FEATURE0_L*sizeof(float));
         //printf("after \"memcpy\" \n");
->>>>>>> master
 
         net_forward(alexnet, &feats);
         //printf("after \"net_forward\" \n");
@@ -199,18 +194,6 @@ void train(Alexnet *alexnet, int epochs)
 
         // update all trainable parameters
         net_backward(&error, alexnet, &deltas, &feats, LEARNING_RATE);
-<<<<<<< HEAD
-
-        static float metric=0; 
-        static int labels[BATCH_SIZE],preds[BATCH_SIZE];
-        for(int i=0; i<BATCH_SIZE; i++)
-        {
-            labels[i] = argmax(feats.output[i*OUT_LAYER], OUT_LAYER); 
-            preds[i]  = argmax(feats.output[i*OUT_LAYER], OUT_LAYER);
-        }
-        metrics(&metric, preds, labels, OUT_LAYER, BATCH_SIZE, METRIC_ACCURACY);
-        printf("At epoch %d, Accuracy on training data is %d \n", e, metric);
-=======
         //printf("after \"net_backward\" \n");
 
         for(int i=0; i<BATCH_SIZE; i++)
@@ -221,7 +204,6 @@ void train(Alexnet *alexnet, int epochs)
         metrics(&metric, preds, labels, OUT_LAYER, BATCH_SIZE, METRIC_ACCURACY);
         //printf("At epoch %d, Accuracy on training data is %.2f \n", e, metric);
     
->>>>>>> master
     }
 
     free(CeError);
