@@ -158,24 +158,20 @@ void get_random_batch(int n, float *X, float *Y,
      *      X
      *      Y
      * */
+    memset(Y, 0, n*CLASSES*sizeof(float));
     image img; 
     img = make_image(w, h, c);
     char imgpath[256];
     int label = 1;
     for (int i=0; i<n; i++)
     {
-        //label = rand()%CLASSES;
-        label = 2;
+        //label = 2;
         //sprintf(imgpath, "C:\\Download\\AlexNet7-test\\imagenet-mini\\train\\%d\\%d.jpeg", label, rand()%15);
-        sprintf(imgpath, "/home/haris/Documents/AlexNet7/dataset/%d/%d.png", label, rand()%10);
-
-        printf("image: %s \n", imgpath);
+        label = rand()%CLASSES;
+        sprintf(imgpath, "/home/haris/Documents/AlexNet7/imagenet-mini/train/%d/%d.jpeg", label, rand()%15);
+        //printf("image: %s \n", imgpath);
         img = load_image(imgpath, w, h, c);
         memcpy(X+i*w*h*c, img.data, w*h*c*sizeof(float));
-        for(int s=0; s<CLASSES; s++)
-        {
-            Y[i*CLASSES+s]=0;
-        } 
         Y[i*CLASSES+label]=1;
     }
 }
