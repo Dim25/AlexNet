@@ -36,6 +36,13 @@
 #define POOLING5_L 6
 
 
+typedef struct {
+    float *x_norm;
+    float *avg;
+    float *var;
+}BN_params;
+
+
 typedef struct{
 
     float C1_weights[C1_CHANNELS][IN_CHANNELS][C1_KERNEL_L][C1_KERNEL_L];
@@ -56,17 +63,13 @@ typedef struct{
     float FC7bias[FC7_LAYER];
     float FC8bias[OUT_LAYER];
 
-    float BN1_gamma, BN1_b;
-    float BN2_gamma, BN2_b;
-    float BN3_gamma, BN3_b;
-    float BN4_gamma, BN4_b;
-    float BN5_gamma, BN5_b;
+    float BN1_gamma[C1_CHANNELS*FEATURE1_L*FEATURE1_L], BN1_b[C1_CHANNELS*FEATURE1_L*FEATURE1_L];
+    float BN2_gamma[C2_CHANNELS*FEATURE2_L*FEATURE2_L], BN2_b[C2_CHANNELS*FEATURE2_L*FEATURE2_L];
+    float BN3_gamma[C3_CHANNELS*FEATURE3_L*FEATURE3_L], BN3_b[C3_CHANNELS*FEATURE3_L*FEATURE3_L];
+    float BN4_gamma[C4_CHANNELS*FEATURE4_L*FEATURE4_L], BN4_b[C4_CHANNELS*FEATURE4_L*FEATURE4_L];
+    float BN5_gamma[C5_CHANNELS*FEATURE5_L*FEATURE5_L], BN5_b[C5_CHANNELS*FEATURE5_L*FEATURE5_L];
 
-    float   BN1_avg[C1_CHANNELS*FEATURE1_L*FEATURE1_L], BN1_var[C1_CHANNELS*FEATURE1_L*FEATURE1_L],
-            BN2_avg[C2_CHANNELS*FEATURE2_L*FEATURE2_L], BN2_var[C2_CHANNELS*FEATURE2_L*FEATURE2_L],
-            BN3_avg[C3_CHANNELS*FEATURE3_L*FEATURE3_L], BN3_var[C3_CHANNELS*FEATURE3_L*FEATURE3_L],
-            BN4_avg[C4_CHANNELS*FEATURE4_L*FEATURE4_L], BN4_var[C4_CHANNELS*FEATURE4_L*FEATURE4_L],
-            BN5_avg[C5_CHANNELS*FEATURE5_L*FEATURE5_L], BN5_var[C5_CHANNELS*FEATURE5_L*FEATURE5_L];
+    BN_params bnp1, bnp2, bnp3, bnp4, bnp5;
             
 }Alexnet;
 
@@ -102,45 +105,12 @@ typedef struct {
 
 
 void zero_feats(Feature *feats);
+void zero_grads(Alexnet *grads);
 
 void global_params_initialize(Alexnet *net);
 
-void zero_grads(Alexnet *grads);
-
-void nonlinear_forward(float *x, int units);
-
-void nonlinear_backward(float *x, int units);
-
-void conv_forward(float *input, float *weights, float *bias, float *output, 
-                int in_channels, int out_channels, int kernel_size, int padding, int strides, int w, int h);
-
-void conv_backward(float *in_error, float *out_error, float *input, float *weights,
-                   float *w_deltas, float *b_deltas, int in_channels, int out_channels,
-                   int w, int h, int padding, int kernel_size, int strides);
-
-void max_pooling_forward(float *input, float *output, int channels, int in_length, int strides, int pool_size);
-
-void max_pooling_backward(int channels, int pool_size, int in_length, float *in_error, float *out_error, float *input);
-
-void fc_forward(float *input, float *out, float *weights, float *bias, int in_units, int out_units);
-
-void fc_backward(float *input, float *weights, float *in_error, float *out_error,
-                 float *w_deltas, float *b_deltas, int in_units, int out_units);
-
-void batch_normalization_forward(float *input, float *output, float gamma, float beta, float *avg, float *var, int units);
-
-void batch_normalization_backward(float *in_error, float *out_error, 
-                                    float *delta_gamma, float *delta_beta, 
-                                        float *avg, float *var, float gamma, int units);
-
-void softmax_forward(float *x, int units);
-
-void softmax_backward(float *error, int units);
-
-
-void net_forward(Alexnet *alexnet, Feature *feats);
+void net_forward(const Alexnet *alexnet, Feature *feats);
 void net_backward(Feature *error, const Alexnet *alexnet, Alexnet *deltas, const Feature *feats, float lr);
-void cal_v_detlas(Alexnet *v, Alexnet *d);
 
 void CatelogCrossEntropy(float *error, const float *preds, const float *labels, int units);
 void CatelogCrossEntropy_backward(float *delta_preds, const float *preds, const float *labels, int units);

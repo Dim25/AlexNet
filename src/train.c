@@ -179,6 +179,7 @@ void train(Alexnet *alexnet, int epochs)
 
     float metric=0; 
     int labels[BATCH_SIZE], preds[BATCH_SIZE];
+    float *pt;
 
     printf(" ################# training start ################# \n");
     struct timespec start, finish; double duration;
@@ -186,22 +187,9 @@ void train(Alexnet *alexnet, int epochs)
     {
         zero_feats(&error);
         zero_grads(&deltas);
-
+        zero_feats(&feats);
         // sample random batch of data for training
         get_random_batch(BATCH_SIZE, &(feats.input), batch_y, FEATURE0_L, FEATURE0_L, IN_CHANNELS, OUT_LAYER);
-        float *pt = &(feats.input);
-
-/*
-        pt = &(alexnet->FC8weights);
-        for(int u=0; u<512; u+=4)
-        {
-            printf("FC8weights[%d]:%.2f  ", u, pt[u]);
-            if(u%32==0)
-                printf("\n");
-        }
-        printf("\n"); 
-*/
-
         printf("input data loaded... \n");
 
         clock_gettime(CLOCK_MONOTONIC, &start);
@@ -211,6 +199,8 @@ void train(Alexnet *alexnet, int epochs)
         duration += (finish.tv_nsec - start.tv_nsec) / 1000000000.0;
         printf("net_forward duration: %.2fs \n", duration);
         printf("after \"net_forward\" ... \n");
+
+        pt = &(feats.output);
 
         // compute CatelogCrossEntropy
         CatelogCrossEntropy(CeError, feats.output, batch_y, OUT_LAYER);
@@ -225,20 +215,11 @@ void train(Alexnet *alexnet, int epochs)
             if(u%32==0)
                 printf("\n");
         }        printf("\n");
-        pt = &(feats.output);
-        for(int u=0; u<1000; u++)
-        {
-            if(pt[u]>0)
-                printf("output[%d]:%.4f  ", u, pt[u]);
-            if(u%32==0)
-                printf("\n");
-        }        printf("\n");
 */
-
 
         // update all trainable parameters
         clock_gettime(CLOCK_MONOTONIC, &start);
-        net_backward(&error, alexnet, &deltas, &feats, LEARNING_RATE);
+        //net_backward(&error, alexnet, &deltas, &feats, LEARNING_RATE);
         clock_gettime(CLOCK_MONOTONIC, &finish);
         duration = (finish.tv_sec - start.tv_sec);
         duration += (finish.tv_nsec - start.tv_nsec) / 1000000000.0;
@@ -251,6 +232,7 @@ void train(Alexnet *alexnet, int epochs)
             printf("index %d: label:%d  ", i, labels[i]);
             preds[i] = argmax(&(feats.output), i*OUT_LAYER, OUT_LAYER);
             printf("pred:%d \n", preds[i]);
+            printf("            output[%d]:%.4f  output[+500]:%.4f\n", i*1000, pt[i*1000]*100, pt[i*1000+500]*100);
         }
         metrics(&metric, preds, labels, OUT_LAYER, BATCH_SIZE, METRIC_ACCURACY);
         printf("At epoch %d, Accuracy on training batch data is %.2f\% \n\n", e, metric*100);

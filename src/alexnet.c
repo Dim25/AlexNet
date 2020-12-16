@@ -154,7 +154,7 @@ void conv_forward(float *input, float *weights, float *bias, float *output,
 
 void conv_backward(float *in_error, float *out_error, float *input, float *weights,
                    float *w_deltas, float *b_deltas, int in_channels, int out_channels,
-                   int w, int h, int padding, int kernel_size, int strides)
+                   int in_w, int in_h, int padding, int kernel_size, int strides)
 {
     /**
      * Conv2D backward
@@ -168,8 +168,8 @@ void conv_backward(float *in_error, float *out_error, float *input, float *weigh
      *      w_deltas
      *      b_deltas
      * */
-    int out_w = (w+2*padding-kernel_size) / strides + 1,
-        out_h = (h+2*padding-kernel_size) / strides + 1;
+    int out_w = (in_w+2*padding-kernel_size) / strides + 1,
+        out_h = (in_h+2*padding-kernel_size) / strides + 1;
 
     // compute b_deltas
     for (int c=0; c<out_channels; c++)
@@ -193,27 +193,34 @@ void conv_backward(float *in_error, float *out_error, float *input, float *weigh
                 {
                     for (int i = 0; i < kernel_size; i++)
                     {
-                        if (strides*out_x+i-padding < 0 | strides*out_x+i-padding >= w)
+                        if (strides*out_x+i-padding < 0 | strides*out_x+i-padding >= in_w)
                             continue;
 
                         for (int j = 0; j < kernel_size; j++)
                         {
-                            if (strides*out_y+j-padding < 0 | strides*out_y+j-padding >= h)
+                            if (strides*out_y+j-padding < 0 | strides*out_y+j-padding >= in_h)
                                 continue;
                             
                             out_shift = out_c*out_w*out_h + out_x*out_h + out_y;
+                            w_shift = out_c*in_channels*kernel_size*kernel_size + in_c*kernel_size*kernel_size + i*kernel_size + j;
 
                             // compute w_deltas[out_c][in_c][i][j]
                             for(int p=0; p<BATCH_SIZE; p++)
                             {                                
-                                in_shift = p*in_channels*w*h + in_c*w*h + (strides*out_x+i-padding)*h + (strides*out_y+j-padding);
-                                w_shift = out_c*in_channels*kernel_size*kernel_size + in_c*kernel_size*kernel_size + i*kernel_size + j;
+                                in_shift = p*in_channels*in_w*in_h + in_c*in_w*in_h + (strides*out_x+i-padding)*in_h + (strides*out_y+j-padding);
                                 w_deltas[w_shift] += input[in_shift] * out_error[out_shift];
                             }
                             w_deltas[w_shift] /= BATCH_SIZE;
-
+/*                             if(w_deltas[w_shift]>4)
+                            {
+                                printf("$$$$$$$$$$$$$$$$$ out_error[out_shift]: %.2f \n", out_error[out_shift]);
+                                printf("$$$$$$$$$$$$$$$$$ w_deltas[w_shift]: %.2f \n", w_deltas[w_shift]);
+                                printf("$$$$$$$$$$$$$$$$$ w_deltas[w_shift] too big!!! $$$$$$$$$$$$$$$$$ \n\n");
+                                //exit(-1);
+                            }
+ */
                             // compute in_error[in_c][][]
-                            in_shift = in_c*w*h + (strides*out_x+i-padding)*h + (strides*out_y+j-padding);
+                            in_shift = in_c*in_w*in_h + (strides*out_x+i-padding)*in_h + (strides*out_y+j-padding);
                             w_shift = out_c*in_channels*kernel_size*kernel_size + in_c*kernel_size*kernel_size + (kernel_size-i-1)*kernel_size + j;                                
                             in_error[in_shift] += out_error[out_shift] * weights[w_shift];
                         }
@@ -239,7 +246,7 @@ void nonlinear_forward(float *x, int units)
      * */
     for (int i = 0; i < units; i++)
     {
-        x[i] = x[i]>0?x[i]:0;
+        x[i] = (x[i]>0)?x[i]:0;
     }
 }
 
@@ -368,7 +375,7 @@ void max_pooling_backward(int channels, int pool_size, int in_length, float *in_
 }
 
 
-void fc_forward(float *input, float *out, float *weights, float *bias, int in_units, int out_units)
+void fc_forward(float *input, float *output, float *weights, float *bias, int in_units, int out_units)
 {
     /**
      * fully connected layer forward
@@ -380,25 +387,25 @@ void fc_forward(float *input, float *out, float *weights, float *bias, int in_un
      * Output:
      *      out      (BATCH_SIZE, out_units)
      * */
+
     for (int p=0; p<BATCH_SIZE; p++)
     {
         for (int i = 0; i < in_units; i++)
         {
             for (int j = 0; j < out_units; j++)
             {
-                out[p*out_units + j] += input[p*in_units + i] * weights[i * out_units + j];
+                output[p*out_units + j] += input[p*in_units + i] * weights[j * out_units + i];
             }
         }
         for (int i = 0; i < out_units; i++)
         {
-            out[p*out_units + i] += bias[i];
+            output[p*out_units + i] += bias[i];
         }
     }
-
 }
+ 
 
-
-void fc_backward(float *input, float *weights, float *in_error, float *out_error,
+void fc_backward(const float *input, const float *weights, float *in_error, const float *out_error,
                  float *w_deltas, float *b_deltas, int in_units, int out_units)
 {
     /**
@@ -418,7 +425,7 @@ void fc_backward(float *input, float *weights, float *in_error, float *out_error
     {
         for (int j=0; j<out_units; j++)
         {
-            in_error[i] = weights[i*out_units + j] * out_error[j];
+            in_error[i] += weights[i*out_units + j] * out_error[j];
             for (int r=0; r<BATCH_SIZE; r++)
             {
                 w_deltas[i*out_units + j] += input[r*in_units + i] * out_error[j];
@@ -427,14 +434,13 @@ void fc_backward(float *input, float *weights, float *in_error, float *out_error
         }
     }
 
-
     for (int p = 0; p < out_units; p++)
-        b_deltas[p] += out_error[p];
+        b_deltas[p] = out_error[p];
 
 }
 
 
-void batch_normalization_forward(float *input, float *output, float gamma, float beta, float *avg, float *var, int units)
+void batch_normalization_forward(float *input, float *output, float *gamma, float *beta, int units, BN_params *bnp)
 {
     /**
      * batch normalization forward
@@ -443,74 +449,105 @@ void batch_normalization_forward(float *input, float *output, float gamma, float
      * input    (BATCH_SIZE, units)
      * output   (BATCH_SIZE, units)
      * */
+    bnp->avg = (float *)malloc(sizeof(float)*units);
+    bnp->var = (float *)malloc(sizeof(float)*units);
+    bnp->x_norm = (float *)malloc(sizeof(float)*BATCH_SIZE*units);
 
-    // calculate average for each unit along batch axis
+    // calculate mean for each unit along batch axis
     for (int i = 0; i < units; i++)
     {
-        avg[i] = 0;
+        bnp->avg[i] = 0;
         for (int p = 0; p < BATCH_SIZE; p++)
         {
-            avg[i] += input[p * units + i];
+            bnp->avg[i] += input[p * units + i];
         }
-        avg[i] /= BATCH_SIZE;
+        bnp->avg[i] /= BATCH_SIZE;
     }
 
     // calculate variance for each unit along batch axis
     for (int i = 0; i < units; i++)
     {
-        var[i] = 0;
+        bnp->var[i] = 0;
         for (int p = 0; p < BATCH_SIZE; p++)
         {
-            var[i] += (input[p*units + i] - avg[i]) * (input[p*units + i] - avg[i]);
+            bnp->var[i] += (input[p*units + i] - bnp->avg[i]) * (input[p*units + i] - bnp->avg[i]);
         }
+        bnp->var[i] /= BATCH_SIZE;
     }
 
     for (int i = 0; i < units; i++)
     {
         for (int p = 0; p < BATCH_SIZE; p++)
         {
-            output[p*units + i] = gamma * (input[p*units + i] - avg[i]) / sqrt(var[i] + EPSILON) + beta;
+            bnp->x_norm[p*units+i] = (input[p*units + i] - bnp->avg[i]) / sqrt(bnp->var[i] + EPSILON); 
+            //output[p*units+i] = gamma[i] * bnp->x_norm[p*units+i] + beta[i];
+            output[p*units+i] = bnp->x_norm[p*units+i];
         }
     }
 
+/*     for (int i = 0; i < units; i++)
+    {
+        for (int p = 0; p < BATCH_SIZE; p++)
+            output[p*units+i] = input[p*units+i];
+    } */
 }
 
 
-void batch_normalization_backward(float *in_error, float *out_error, 
-                                    float *delta_gamma, float *delta_beta, 
-                                        float *avg, float *var, float gamma, int units)
+void batch_normalization_backward(float *in_error, const float *out_error, float *delta_gamma, float *delta_beta, 
+                                    float *gamma, int units, BN_params *bnp)
 {
     /**
      * batch normalization backward
      * 
      * Input:
-     *      out_error
-     *      avg
-     *      var
      * Output:
-     *      in_error
-     *      delta_gamma
-     *      delta_beta
      * */
-    float *delta_x_avg = (float *)malloc(units*4);
-    float sum_delta_x_avg = 0;
-    float sum_xavg_dxavg = 0;
+    float   nn = 1.0/BATCH_SIZE;
 
+/*   
+    float *tmp = (float *)malloc(units * sizeof(float));
     for (int i = 0; i < units; i++)
     {
-        *delta_gamma += avg[i] * out_error[i];
-        *delta_beta += out_error[i];
+        for(int p=0; p<BATCH_SIZE; p++)
+        {
+            delta_gamma[i] += bnp->x_norm[p*units+i] * out_error[i];
+        }
+        delta_gamma[i] /= BATCH_SIZE;
+        //delta_beta[i] += out_error[i];
+        delta_beta[i]=0;
 
-        delta_x_avg[i] = out_error[i] * gamma;
-        sum_delta_x_avg += delta_x_avg[i];
-        sum_xavg_dxavg += avg[i]*delta_x_avg[i];
+        tmp[i] = 0;
+        for(int p=0; p<BATCH_SIZE; p++)
+        {
+            tmp[i] += bnp->x_norm[p*units+i];
+        }
+        tmp[i] /= BATCH_SIZE;
     }
 
     for (int i = 0; i < units; i++)
-        in_error[i] =  BATCH_SIZE*delta_x_avg[i] - sum_delta_x_avg - delta_x_avg[i]*sum_xavg_dxavg;
+    {
+        in_error[i] = gamma[i] * out_error[i] / sqrt(bnp->var[i]+EPSILON) * (1 - nn - nn*(1-nn)*tmp[i]*tmp[i]); 
+        if(in_error[i]-out_error[i]>0.2)
+        {
+            printf("$$$$$$$$$$$$ batch_normalization_backward (1 - nn - nn*(1-nn)*tmp[i]*tmp[i]):%.2f \n", (1 - nn - nn*(1-nn)*tmp[i]*tmp[i]));
+            printf("$$$$$$$$$$$$ batch_normalization_backward tmp[i]:%.2f \n", tmp[i]);
+            printf("$$$$$$$$$$$$ batch_normalization_backward in_error:%.2f out_error:%.2f \n", in_error[i], out_error[i]);
+        } 
+    } 
+    free(tmp);
+*/
 
-    free(delta_x_avg);
-
+    
+    for (int i = 0; i < units; i++)
+    {
+        delta_gamma[i] = 0;
+        delta_beta[i] = 0;
+        in_error[i] = out_error[i];
+    }
+    
+    free(bnp->avg);
+    free(bnp->var);
+    free(bnp->x_norm);
 }
 
 
@@ -560,7 +597,7 @@ void softmax_backward(float *error, int units)
         for(int j=0; j<units; j++)
         {
             if(i==j){
-                error[j] += tmp[j] * (1-tmp[i]);
+                error[j] += tmp[i] * (1-tmp[i]);
             }else{
                 error[j] -= tmp[j] * tmp[i];
             }
@@ -625,16 +662,17 @@ void zero_grads(Alexnet *grads)
     memset(grads->FC7bias, 0, FC7_LAYER);
     memset(grads->FC8bias, 0, OUT_LAYER);
 
-    grads->BN1_gamma = 0;
-    grads->BN2_gamma = 0;
-    grads->BN3_gamma = 0;
-    grads->BN4_gamma = 0;
-    grads->BN5_gamma = 0;
-    grads->BN1_b = 0;
-    grads->BN2_b = 0;
-    grads->BN3_b = 0;
-    grads->BN4_b = 0;
-    grads->BN5_b = 0;
+    memset(grads->BN1_gamma, 0, C1_CHANNELS*FEATURE1_L*FEATURE1_L* sizeof(float));
+    memset(grads->BN1_b, 0, C1_CHANNELS*FEATURE1_L*FEATURE1_L* sizeof(float));
+    memset(grads->BN2_gamma, 0, C2_CHANNELS*FEATURE2_L*FEATURE2_L* sizeof(float));
+    memset(grads->BN2_b, 0, C2_CHANNELS*FEATURE2_L*FEATURE2_L* sizeof(float));
+    memset(grads->BN3_gamma, 0, C3_CHANNELS*FEATURE3_L*FEATURE3_L* sizeof(float));
+    memset(grads->BN3_b, 0, C3_CHANNELS*FEATURE3_L*FEATURE3_L* sizeof(float));
+    memset(grads->BN4_gamma, 0, C4_CHANNELS*FEATURE4_L*FEATURE4_L* sizeof(float));
+    memset(grads->BN4_b, 0, C4_CHANNELS*FEATURE4_L*FEATURE4_L* sizeof(float));
+    memset(grads->BN5_gamma, 0, C5_CHANNELS*FEATURE5_L*FEATURE5_L* sizeof(float));
+    memset(grads->BN5_b, 0, C5_CHANNELS*FEATURE5_L*FEATURE5_L* sizeof(float));
+
 }
 
 
@@ -669,7 +707,7 @@ void zero_feats(Feature *feats)
 
 void xavier_initialization(float *p, int n, int in_units, int out_units)
 {
-    float boundary = sqrt(6.0/(in_units+out_units));
+    float boundary = sqrt(12.0/(in_units+out_units));
     for(int shift=0; shift<n; shift++)
     {
         p[shift] = (rand()%100 *1.0 )/100.0 * (2*boundary) - boundary;
@@ -709,27 +747,44 @@ void global_params_initialize(Alexnet *net)
     for(i=0; i<OUT_LAYER; i++)
         net->FC8bias[i] = 1;
 
-    net->BN1_gamma = 1;
-    net->BN2_gamma = 1;
-    net->BN3_gamma = 1;
-    net->BN4_gamma = 1;
-    net->BN5_gamma = 1;
-    net->BN1_b = 0;
-    net->BN2_b = 0;
-    net->BN3_b = 0;
-    net->BN4_b = 0;
-    net->BN5_b = 0;
+    for(i=0; i<C1_CHANNELS*FEATURE1_L*FEATURE1_L; i++)
+    {
+        net->BN1_gamma[i] = 1;
+        net->BN1_b[i] = 0;
+    }
+    for(i=0; i<C2_CHANNELS*FEATURE2_L*FEATURE2_L; i++)
+    {
+        net->BN2_gamma[i] = 1;
+        net->BN2_b[i] = 0;
+    }
+    for(i=0; i<C3_CHANNELS*FEATURE3_L*FEATURE3_L; i++)
+    {
+        net->BN3_gamma[i] = 1;
+        net->BN3_b[i] = 0;
+    }
+
+    for(i=0; i<C4_CHANNELS*FEATURE4_L*FEATURE4_L; i++)
+    {
+        net->BN4_gamma[i] = 1;
+        net->BN4_b[i] = 0;
+    }
+
+    for(i=0; i<C5_CHANNELS*FEATURE5_L*FEATURE5_L; i++)
+    {
+        net->BN4_gamma[i] = 1;
+        net->BN4_b[i] = 0;
+    }
 };
 
 
-void net_forward(Alexnet *alexnet, Feature *feats)
+void net_forward(const Alexnet *alexnet, Feature *feats)
 {
     struct timespec start, finish;
     double duration;
 
     clock_gettime(CLOCK_MONOTONIC, &start);
     conv_forward(feats->input, alexnet->C1_weights, alexnet->C1_bias, feats->C1, IN_CHANNELS, C1_CHANNELS, C1_KERNEL_L, 4, C1_STRIDES, FEATURE0_L, FEATURE0_L);
-    batch_normalization_forward(feats->C1, feats->BN1, alexnet->BN1_gamma, alexnet->BN1_b, alexnet->BN1_avg, alexnet->BN1_var, C1_CHANNELS*FEATURE1_L*FEATURE1_L);
+    batch_normalization_forward(feats->C1, feats->BN1, alexnet->BN1_gamma, alexnet->BN1_b, C1_CHANNELS*FEATURE1_L*FEATURE1_L, &(alexnet->bnp1));
     nonlinear_forward(feats->BN1, C1_CHANNELS*FEATURE1_L*FEATURE1_L);
     clock_gettime(CLOCK_MONOTONIC, &finish);
 #ifdef SHOW_OP_TIME
@@ -749,7 +804,7 @@ void net_forward(Alexnet *alexnet, Feature *feats)
 
     clock_gettime(CLOCK_MONOTONIC, &start);
     conv_forward(feats->P1, alexnet->C2_weights, alexnet->C2_bias, feats->C2, C1_CHANNELS, C2_CHANNELS, C2_KERNEL_L, 1, C2_STRIDES, FEATURE1_L, FEATURE1_L);
-    batch_normalization_forward(feats->C2, feats->BN2, alexnet->BN2_gamma, alexnet->BN2_b, alexnet->BN2_avg, alexnet->BN2_var,  C2_CHANNELS*FEATURE2_L*FEATURE2_L);
+    batch_normalization_forward(feats->C2, feats->BN2, alexnet->BN2_gamma, alexnet->BN2_b, C2_CHANNELS*FEATURE2_L*FEATURE2_L, &(alexnet->bnp2));
     nonlinear_forward(feats->BN2, C2_CHANNELS*FEATURE2_L*FEATURE2_L);
     clock_gettime(CLOCK_MONOTONIC, &finish);
 #ifdef SHOW_OP_TIME
@@ -769,7 +824,7 @@ void net_forward(Alexnet *alexnet, Feature *feats)
 
     clock_gettime(CLOCK_MONOTONIC, &start);
     conv_forward(feats->P2, alexnet->C3_weights, alexnet->C3_bias, feats->C3, C2_CHANNELS, C3_CHANNELS, C3_KERNEL_L, 1, C3_STRIDES, FEATURE2_L, FEATURE2_L);
-    batch_normalization_forward(feats->C3, feats->BN3, alexnet->BN3_gamma, alexnet->BN3_b, alexnet->BN3_avg, alexnet->BN3_var,  C3_CHANNELS*FEATURE3_L*FEATURE3_L);
+    batch_normalization_forward(feats->C3, feats->BN3, alexnet->BN3_gamma, alexnet->BN3_b, C3_CHANNELS*FEATURE3_L*FEATURE3_L, &(alexnet->bnp3));
     nonlinear_forward(feats->BN3, C3_CHANNELS*FEATURE3_L*FEATURE3_L);
     clock_gettime(CLOCK_MONOTONIC, &finish);
 #ifdef SHOW_OP_TIME
@@ -780,7 +835,7 @@ void net_forward(Alexnet *alexnet, Feature *feats)
     
     clock_gettime(CLOCK_MONOTONIC, &start);
     conv_forward(feats->BN3, alexnet->C4_weights, alexnet->C4_bias, feats->C4, C3_CHANNELS, C4_CHANNELS, C4_KERNEL_L, 1, C4_STRIDES, FEATURE3_L, FEATURE4_L);
-    batch_normalization_forward(feats->C4, feats->BN4, alexnet->BN4_gamma, alexnet->BN4_b, alexnet->BN4_avg, alexnet->BN4_var,  C4_CHANNELS*FEATURE4_L*FEATURE4_L);
+    batch_normalization_forward(feats->C4, feats->BN4, alexnet->BN4_gamma, alexnet->BN4_b, C4_CHANNELS*FEATURE4_L*FEATURE4_L, &(alexnet->bnp4));
     nonlinear_forward(feats->BN4, C4_CHANNELS*FEATURE4_L*FEATURE4_L);
     clock_gettime(CLOCK_MONOTONIC, &finish);
 #ifdef SHOW_OP_TIME
@@ -791,7 +846,7 @@ void net_forward(Alexnet *alexnet, Feature *feats)
 
     clock_gettime(CLOCK_MONOTONIC, &start);
     conv_forward(feats->BN4, alexnet->C5_weights, alexnet->C5_bias, feats->C5, C4_CHANNELS, C5_CHANNELS, C5_KERNEL_L, 1, C5_STRIDES, FEATURE4_L, FEATURE4_L);
-    batch_normalization_forward(feats->C5, feats->BN5, alexnet->BN5_gamma, alexnet->BN5_b, alexnet->BN5_avg, alexnet->BN5_var,  C5_CHANNELS*FEATURE5_L*FEATURE5_L);
+    batch_normalization_forward(feats->C5, feats->BN5, alexnet->BN5_gamma, alexnet->BN5_b, C5_CHANNELS*FEATURE5_L*FEATURE5_L, &(alexnet->bnp5));
     nonlinear_forward(feats->BN5, C5_CHANNELS*FEATURE5_L*FEATURE5_L);
     clock_gettime(CLOCK_MONOTONIC, &finish);
 #ifdef SHOW_OP_TIME
@@ -862,56 +917,56 @@ void gradient_descent(Alexnet *alexnet, Alexnet *deltas, float a)
     p_d = &(deltas->C1_weights); 
     for(i=0; i<C1_CHANNELS*IN_CHANNELS*C1_KERNEL_L*C1_KERNEL_L; i++)
     {
-        p_w[i] -= a * p_d[i];
+        p_w[i] -= a * MIN(0.8,p_d[i]);
     }
 
     p_w = &(alexnet->C2_weights);
     p_d = &(deltas->C2_weights); 
     for(i=0; i<C2_CHANNELS*C1_CHANNELS*C2_KERNEL_L*C2_KERNEL_L; i++)
     {
-        p_w[i] -= a * p_d[i];
+        p_w[i] -= a * MIN(0.8,p_d[i]);
     }
 
     p_w = &(alexnet->C3_weights);
     p_d = &(deltas->C3_weights); 
     for(i=0; i<C3_CHANNELS*C2_CHANNELS*C3_KERNEL_L*C3_KERNEL_L; i++)
     {
-        p_w[i] -= a * p_d[i];
+        p_w[i] -= a * MIN(0.8,p_d[i]);
     }
 
     p_w = &(alexnet->C4_weights);
     p_d = &(deltas->C4_weights); 
     for(i=0; i<C4_CHANNELS*C3_CHANNELS*C4_KERNEL_L*C4_KERNEL_L; i++)
     {
-        p_w[i] -= a * p_d[i];
+        p_w[i] -= a * MIN(0.8,p_d[i]);
     }
 
     p_w = &(alexnet->C5_weights);
     p_d = &(deltas->C5_weights); 
     for(i=0; i<C5_CHANNELS*C4_CHANNELS*C5_KERNEL_L*C5_KERNEL_L; i++)
     {
-        p_w[i] -= a * p_d[i];
+        p_w[i] -= a * MIN(0.8,p_d[i]);
     }
 
     p_w = &(alexnet->FC6weights);
     p_d = &(deltas->FC6weights); 
-    for(i=0; i<C5_CHANNELS*FC6_LAYER*FC6KERNEL_L*FC6KERNEL_L; i++)
+    for(i=0; i<FC6_LAYER*C5_CHANNELS*FC6KERNEL_L*FC6KERNEL_L; i++)
     {
-        p_w[i] -= a * p_d[i];
+        p_w[i] -= a * MIN(0.8,p_d[i]);
     }
 
     p_w = &(alexnet->FC7weights);
     p_d = &(deltas->FC7weights); 
     for(i=0; i<FC6_LAYER*FC7_LAYER; i++)
     {
-        p_w[i] -= a * p_d[i];
+        p_w[i] -= a * MIN(0.8,p_d[i]);
     }
 
     p_w = &(alexnet->FC8weights);
     p_d = &(deltas->FC8weights); 
     for(i=0; i<FC7_LAYER*OUT_LAYER; i++)
     {
-        p_w[i] -= a * p_d[i];
+        p_w[i] -= a * MIN(0.8,p_d[i]);
     }
 
     for(i=0; i<C1_CHANNELS; i++)
@@ -954,16 +1009,33 @@ void gradient_descent(Alexnet *alexnet, Alexnet *deltas, float a)
         alexnet->FC8bias[i] -= a * deltas->FC8bias[i];
     }
 
-    alexnet->BN1_gamma -= a * deltas->BN1_gamma;
-    alexnet->BN2_gamma -= a * deltas->BN2_gamma; 
-    alexnet->BN3_gamma -= a * deltas->BN3_gamma; 
-    alexnet->BN4_gamma -= a * deltas->BN4_gamma; 
-    alexnet->BN5_gamma -= a * deltas->BN5_gamma; 
-    alexnet->BN1_b -= a * deltas->BN1_b; 
-    alexnet->BN2_b -= a * deltas->BN2_b; 
-    alexnet->BN3_b -= a * deltas->BN3_b; 
-    alexnet->BN4_b -= a * deltas->BN4_b; 
-    alexnet->BN5_b -= a * deltas->BN5_b; 
+    for(i=0; i<C1_CHANNELS*FEATURE1_L*FEATURE1_L; i++)
+    {
+        alexnet->BN1_gamma[i] -= a * deltas->BN1_gamma[i];
+        alexnet->BN1_b[i] -= a * deltas->BN1_b[i]; 
+    }
+    for(i=0; i<C2_CHANNELS*FEATURE2_L*FEATURE2_L; i++)
+    {
+        alexnet->BN2_gamma[i] -= a * deltas->BN2_gamma[i];
+        alexnet->BN2_b[i] -= a * deltas->BN2_b[i]; 
+    }
+    for(i=0; i<C3_CHANNELS*FEATURE3_L*FEATURE3_L; i++)
+    {
+        alexnet->BN3_gamma[i] -= a * deltas->BN3_gamma[i];
+        alexnet->BN3_b[i] -= a * deltas->BN3_b[i]; 
+    }
+
+    for(i=0; i<C4_CHANNELS*FEATURE4_L*FEATURE4_L; i++)
+    {
+        alexnet->BN4_gamma[i] -= a * deltas->BN4_gamma[i];
+        alexnet->BN4_b[i] -= a * deltas->BN4_b[i]; 
+    }
+
+    for(i=0; i<C5_CHANNELS*FEATURE5_L*FEATURE5_L; i++)
+    {
+        alexnet->BN5_gamma[i] -= a * deltas->BN5_gamma[i];
+        alexnet->BN5_b[i] -= a * deltas->BN5_b[i]; 
+    }
 }
 
 
@@ -1076,18 +1148,35 @@ void cal_v_detlas(Alexnet *v, Alexnet *d)
         v->FC8bias[i] = BETA * v->FC8bias[i] + (1-BETA) * d->FC8bias[i];
     }
 
-    v->BN1_gamma = BETA * v->BN1_gamma + (1-BETA) * d->BN1_gamma;
-    v->BN2_gamma = BETA * v->BN2_gamma + (1-BETA) * d->BN2_gamma;
-    v->BN3_gamma = BETA * v->BN3_gamma + (1-BETA) * d->BN3_gamma;
-    v->BN4_gamma = BETA * v->BN4_gamma + (1-BETA) * d->BN4_gamma;
-    v->BN5_gamma = BETA * v->BN5_gamma + (1-BETA) * d->BN5_gamma;
 
-    v->BN1_b = BETA * v->BN1_b + (1-BETA) * d->BN1_b;
-    v->BN2_b = BETA * v->BN2_b + (1-BETA) * d->BN2_b;
-    v->BN3_b = BETA * v->BN3_b + (1-BETA) * d->BN3_b;
-    v->BN4_b = BETA * v->BN4_b + (1-BETA) * d->BN4_b;
-    v->BN5_b = BETA * v->BN5_b + (1-BETA) * d->BN5_b;
 
+    for(i=0; i<C1_CHANNELS*FEATURE1_L*FEATURE1_L; i++)
+    {
+        v->BN1_gamma[i] = BETA * v->BN1_gamma[i] + (1-BETA) * d->BN1_gamma[i];
+        v->BN1_b[i] = BETA * v->BN1_b[i] + (1-BETA) * d->BN1_b[i];
+    }
+    for(i=0; i<C2_CHANNELS*FEATURE2_L*FEATURE2_L; i++)
+    {    
+        v->BN2_gamma[i] = BETA * v->BN2_gamma[i] + (1-BETA) * d->BN2_gamma[i];
+        v->BN2_b[i] = BETA * v->BN2_b[i] + (1-BETA) * d->BN2_b[i];
+    }
+    for(i=0; i<C3_CHANNELS*FEATURE3_L*FEATURE3_L; i++)
+    {    
+        v->BN3_gamma[i] = BETA * v->BN3_gamma[i] + (1-BETA) * d->BN3_gamma[i];
+        v->BN3_b[i] = BETA * v->BN3_b[i] + (1-BETA) * d->BN3_b[i];
+    }
+
+    for(i=0; i<C4_CHANNELS*FEATURE4_L*FEATURE4_L; i++)
+    {
+        v->BN4_gamma[i] = BETA * v->BN4_gamma[i] + (1-BETA) * d->BN4_gamma[i];
+        v->BN4_b[i] = BETA * v->BN4_b[i] + (1-BETA) * d->BN4_b[i];
+    }
+
+    for(i=0; i<C5_CHANNELS*FEATURE5_L*FEATURE5_L; i++)
+    {
+        v->BN5_gamma[i] = BETA * v->BN5_gamma[i] + (1-BETA) * d->BN5_gamma[i];
+        v->BN5_b[i] = BETA * v->BN5_b[i] + (1-BETA) * d->BN5_b[i];
+    }
 }
 
 
@@ -1109,21 +1198,21 @@ void net_backward(Feature *error, const Alexnet *alexnet, Alexnet *deltas, const
 
     clock_gettime(CLOCK_MONOTONIC, &start);
     nonlinear_backward(error->BN5, C5_CHANNELS*FEATURE5_L*FEATURE5_L);
-    batch_normalization_backward(error->C5, error->BN5,  &(deltas->BN5_gamma), &(deltas->BN5_b), alexnet->BN5_avg, alexnet->BN5_var, alexnet->BN5_gamma, C5_CHANNELS*FEATURE5_L*FEATURE5_L);
-    conv_backward(error->BN4, error->C5, feats->C5, alexnet->C5_weights, deltas->C5_weights, deltas->C5_bias, 
-                    C4_CHANNELS, C5_CHANNELS, FEATURE5_L, FEATURE5_L, 1, C5_KERNEL_L, 1);
+    batch_normalization_backward(error->C5, error->BN5,  deltas->BN5_gamma, deltas->BN5_b, alexnet->BN4_gamma, C5_CHANNELS*FEATURE5_L*FEATURE5_L, &(alexnet->bnp5));
+    conv_backward(error->BN4, error->C5, feats->BN4, alexnet->C5_weights, deltas->C5_weights, deltas->C5_bias, 
+                    C4_CHANNELS, C5_CHANNELS, FEATURE4_L, FEATURE4_L, 1, C5_KERNEL_L, C5_STRIDES);
     clock_gettime(CLOCK_MONOTONIC, &finish);
 #ifdef SHOW_OP_TIME
     duration = (finish.tv_sec - start.tv_sec);
     duration += (finish.tv_nsec - start.tv_nsec) / 1000000000.0;
     printf(" conv_backward5 duration: %.2fs \n", duration);
 #endif
-
+    
     clock_gettime(CLOCK_MONOTONIC, &start);
     nonlinear_backward(error->BN4, C4_CHANNELS*FEATURE4_L*FEATURE4_L);
-    batch_normalization_backward(error->C4, error->BN4,  &(deltas->BN4_gamma), &(deltas->BN4_b), alexnet->BN4_avg, alexnet->BN5_var, alexnet->BN4_gamma, C4_CHANNELS*FEATURE4_L*FEATURE4_L);
-    conv_backward(error->BN3, error->C4, feats->C4, alexnet->C4_weights, deltas->C4_weights, deltas->C4_bias, 
-                    C3_CHANNELS, C4_CHANNELS, FEATURE4_L, FEATURE4_L, 1, C4_KERNEL_L, 1);
+    batch_normalization_backward(error->C4, error->BN4,  deltas->BN4_gamma, deltas->BN4_b, alexnet->BN4_gamma, C4_CHANNELS*FEATURE4_L*FEATURE4_L, &(alexnet->bnp4));
+    conv_backward(error->BN3, error->C4, feats->BN3, alexnet->C4_weights, deltas->C4_weights, deltas->C4_bias, 
+                    C3_CHANNELS, C4_CHANNELS, FEATURE3_L, FEATURE3_L, 1, C4_KERNEL_L, C4_STRIDES);
     clock_gettime(CLOCK_MONOTONIC, &finish);
 #ifdef SHOW_OP_TIME
     duration = (finish.tv_sec - start.tv_sec);
@@ -1133,9 +1222,9 @@ void net_backward(Feature *error, const Alexnet *alexnet, Alexnet *deltas, const
 
     clock_gettime(CLOCK_MONOTONIC, &start);
     nonlinear_backward(error->BN3, C3_CHANNELS*FEATURE3_L*FEATURE3_L);
-    batch_normalization_backward(error->C3, error->BN3,  &(deltas->BN3_gamma), &(deltas->BN3_b), alexnet->BN3_avg, alexnet->BN5_var, alexnet->BN3_gamma, C3_CHANNELS*FEATURE3_L*FEATURE3_L);
-    conv_backward(error->P2, error->C3, feats->C3, alexnet->C3_weights, deltas->C3_weights, deltas->C3_bias, 
-                    C2_CHANNELS, C3_CHANNELS, FEATURE3_L, FEATURE3_L, 1, C3_KERNEL_L, 1);
+    batch_normalization_backward(error->C3, error->BN3,  deltas->BN3_gamma, deltas->BN3_b, alexnet->BN3_gamma, C3_CHANNELS*FEATURE3_L*FEATURE3_L, &(alexnet->bnp3));
+    conv_backward(error->P2, error->C3, feats->P2, alexnet->C3_weights, deltas->C3_weights, deltas->C3_bias, 
+                    C2_CHANNELS, C3_CHANNELS, POOLING2_L, POOLING2_L, 1, C3_KERNEL_L, C3_STRIDES);
     clock_gettime(CLOCK_MONOTONIC, &finish);
 #ifdef SHOW_OP_TIME
     duration = (finish.tv_sec - start.tv_sec);
@@ -1147,9 +1236,9 @@ void net_backward(Feature *error, const Alexnet *alexnet, Alexnet *deltas, const
 
     clock_gettime(CLOCK_MONOTONIC, &start);
     nonlinear_backward(error->BN2, C2_CHANNELS*FEATURE2_L*FEATURE2_L);
-    batch_normalization_backward(error->C2, error->BN2,  &(deltas->BN2_gamma), &(deltas->BN2_b), alexnet->BN2_avg, alexnet->BN5_var, alexnet->BN2_gamma, C2_CHANNELS*FEATURE2_L*FEATURE2_L);
-    conv_backward(error->P1, error->C2, feats->C2, alexnet->C2_weights, deltas->C2_weights, deltas->C2_bias, 
-                    C1_CHANNELS, C2_CHANNELS, FEATURE2_L, FEATURE2_L, 1, C2_KERNEL_L, 1);
+    batch_normalization_backward(error->C2, error->BN2,  deltas->BN2_gamma, deltas->BN2_b, alexnet->BN2_gamma, C2_CHANNELS*FEATURE2_L*FEATURE2_L, &(alexnet->bnp2));
+    conv_backward(error->P1, error->C2, feats->P1, alexnet->C2_weights, deltas->C2_weights, deltas->C2_bias, 
+                    C1_CHANNELS, C2_CHANNELS, POOLING1_L, POOLING1_L, 1, C2_KERNEL_L, C2_STRIDES);
     clock_gettime(CLOCK_MONOTONIC, &finish);
 #ifdef SHOW_OP_TIME
     duration = (finish.tv_sec - start.tv_sec);
@@ -1161,9 +1250,9 @@ void net_backward(Feature *error, const Alexnet *alexnet, Alexnet *deltas, const
 
     clock_gettime(CLOCK_MONOTONIC, &start);
     nonlinear_backward(error->BN1, C1_CHANNELS*FEATURE1_L*FEATURE1_L);
-    batch_normalization_backward(error->C1, error->BN1, &(deltas->BN1_gamma), &(deltas->BN1_b), alexnet->BN1_avg, alexnet->BN5_var, alexnet->BN1_gamma, C1_CHANNELS*FEATURE1_L*FEATURE1_L);
-    conv_backward(error->input, error->C1, feats->C1, alexnet->C1_weights, deltas->C1_weights, deltas->C1_bias, 
-                    IN_CHANNELS, C1_CHANNELS, FEATURE1_L, FEATURE1_L, 4, C1_KERNEL_L, C1_STRIDES);
+    batch_normalization_backward(error->C1, error->BN1, deltas->BN1_gamma, deltas->BN1_b, alexnet->BN1_gamma, C1_CHANNELS*FEATURE1_L*FEATURE1_L, &(alexnet->bnp1));
+    conv_backward(error->input, error->C1, feats->input, alexnet->C1_weights, deltas->C1_weights, deltas->C1_bias, 
+                    IN_CHANNELS, C1_CHANNELS, FEATURE0_L, FEATURE0_L, 4, C1_KERNEL_L, C1_STRIDES);
     clock_gettime(CLOCK_MONOTONIC, &finish);
 #ifdef SHOW_OP_TIME
     duration = (finish.tv_sec - start.tv_sec);
@@ -1173,7 +1262,6 @@ void net_backward(Feature *error, const Alexnet *alexnet, Alexnet *deltas, const
     static Alexnet v_deltas;
     clock_gettime(CLOCK_MONOTONIC, &start);
     cal_v_detlas(&v_deltas, deltas);
-/* 
     gradient_descent(alexnet, deltas, lr);
     clock_gettime(CLOCK_MONOTONIC, &finish);
 #ifdef SHOW_OP_TIME
@@ -1181,7 +1269,6 @@ void net_backward(Feature *error, const Alexnet *alexnet, Alexnet *deltas, const
     duration += (finish.tv_nsec - start.tv_nsec) / 1000000000.0;
     printf(" MomentunSGD duration: %.2fs \n", duration);
 #endif 
-*/
 
 }
 
@@ -1215,7 +1302,6 @@ void CatelogCrossEntropy(float *error, const float *preds, const float *labels, 
 
 void CatelogCrossEntropy_backward(float *delta_preds, const float *preds, const float *labels, int units)
 {
-
     /**
      * CatelogCrossEntropy backward
      * 
@@ -1233,7 +1319,7 @@ void CatelogCrossEntropy_backward(float *delta_preds, const float *preds, const 
         {
             delta_preds[i] += labels[p*units+i]*preds[p*units+i]+(1-labels[p*units+i])/(1-preds[p*units+i]);
         }
-        delta_preds[i] = MIN(delta_preds[i], 0.8);
+        delta_preds[i] = delta_preds[i]/BATCH_SIZE;
     }
 
 }

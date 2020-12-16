@@ -1,6 +1,6 @@
 #include <stdlib.h>
 
-#define BATCH_SIZE    8
+#define BATCH_SIZE    4
 #define BETA          0.1
 #define LEARNING_RATE 0.001
 #define EPOCHS        16
