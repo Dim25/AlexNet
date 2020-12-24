@@ -75,7 +75,7 @@ make all
 
 ```
 
-1. 
+2. 
 ```
 ./alexnet train -batchsize <batchsize> -epochs <epochs>
 ```
